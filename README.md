@@ -22,7 +22,10 @@ Also included are scripts used for running our implemenation and saving the outp
 
 ## Code that was borrowed From a Previous Project (credit: Lin Jia)
 
- pc, page, offset = load_ip, load_addr >> 12, ((load_addr >> 6) & 0x3f)
-            predicted_delta = 1
-            predicted_address = (int(page) << 12) + (int(offset + predicted_delta) << 6)
+ pc, page, offset = load_ip, load_addr >> 12, ((load_addr >> 6) & 0x3f)  
+ 
+            predicted_delta = 1  
+            
+            predicted_address = (int(page) << 12) + (int(offset + predicted_delta) << 6)  
+            
             prefetch_addresses.append((instr_id, predicted_address))
