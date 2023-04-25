@@ -78,10 +78,15 @@ class OMHModel(object):
         the prefetch addresses.
         '''
 
+        #pattern size 10, k = 1, gap 0, removed index on delta string
+
+        addresses = dict()
+        PCs = dict()
+
         prefetch_addresses = []
         pagehash = dict()
         patterntable = dict()
-        patternsize = 5
+        patternsize = 10
         predictions = 0
         samedelta = 0
         notsamedelta = 0
@@ -89,8 +94,12 @@ class OMHModel(object):
         totalaccesses = 0
         previousprediction = -1
         correctnextaccess = 0
-        predictiongap = 2
+        predictiongap = 10
+        kminhashcount = 4
+        predictbarrier= 5
         for (instr_id, cycle_count, load_addr, load_ip, llc_hit) in data:
+            PCs[load_ip] = 1
+            addresses[load_addr] = 1
             totalaccesses += 1
             pc, page, offset = load_ip, load_addr >> 12, ((load_addr >> 6) & 0x3f)
 
@@ -101,7 +110,9 @@ class OMHModel(object):
             #setting predicted_delta to 1 would make it a next line prefetcher
             #when there isn't anything to predict
             predicted_delta = 1
-            pagestring = str(page)
+            #pagestring = str(page) + str(pc)
+            pagestring = str("forced to be the same")
+            #pagestring = str(page) 
             if pagehash.get(pagestring) == None:
                 pagehash[pagestring] = testclass() 
                 pagedata = pagehash[pagestring]
@@ -120,10 +131,8 @@ class OMHModel(object):
                     if lasthash != "placeholder":
                         #update the pattern table for the last hash
                         if patterntable.get(lasthash) != None:
-                            previousdelta = patterntable[lasthash]
-                            previouscount = patterntable[lasthash]
-                            previousdelta = previousdelta[0]
-                            previouscount = previouscount[1]
+                            previousdelta = (patterntable[lasthash])[0]
+                            previouscount = (patterntable[lasthash])[1]
 
                             #sketching to try and keep the item that appears > 50% of the time
                             if previousdelta == valuedelta:
@@ -152,11 +161,14 @@ class OMHModel(object):
                     accesspattern = pagedata.accesspattern        
                     deltapattern = list()
                     for i in range(1, len(pagedata.accesspattern)):
-                        deltapattern.append(str(i-1) + str(accesspattern[i] - accesspattern[i-1]))
-                    hashes = kmin_kmin(3, 10, deltapattern) 
+                        deltapattern.append(str(accesspattern[i] - accesspattern[i-1]))
+                        #deltapattern.append(str(i-1) + str(accesspattern[i] - accesspattern[i-1]))
+                    hashes = kmin_kmin(kminhashcount, kminhashcount, deltapattern) 
                     hashstring = ""
                     for key in hashes:
                         hashstring += str(key)
+                    hashstring = mmh3.hash(hashstring, 12345)
+
                     #store new hash in page data
                     (pagedata.patternQueue).put(hashstring)
 
@@ -164,7 +176,7 @@ class OMHModel(object):
                     if patterntable.get(hashstring) != None:
                         predicted_delta = patterntable.get(hashstring)[0]
                         predicted_count = patterntable.get(hashstring)[1]
-                        if predicted_count > 1:
+                        if predicted_count > predictbarrier:
                             predicted_address = (int(page) << 12) + (int(offset + predicted_delta) << 6)
                             #predicted_address = load_addr + predicted_delta
                             prefetch_addresses.append((instr_id, predicted_address))
@@ -183,6 +195,13 @@ class OMHModel(object):
         print("not same delta" + str(notsamedelta)) 
         print("new delta" + str(newdelta)) 
         print("correct next access " + str(correctnextaccess))
+        print("page hash size " + str(len(pagehash)))
+        print("pattern table size" + str(len(patterntable)))
+
+        print("total addresses " + str(len(addresses)))
+        print("total PCs " + str(len(PCs)))
+
+
         return prefetch_addresses
 
 # Replace this if you create your own model
